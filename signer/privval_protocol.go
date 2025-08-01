@@ -262,9 +262,10 @@ func (p *V1Protocol) handleSignVoteRequest(ctx context.Context, chainID string, 
 
 	msgSum.SignedVoteResponse.Vote.Timestamp = timestamp
 	msgSum.SignedVoteResponse.Vote.Signature = sig
-	if !req.SkipExtensionSigning && len(voteExtSig) > 0 {
-		msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
-	}
+	// CRITICAL FIX: Always assign ExtensionSignature to ensure deterministic behavior
+	// This matches the legacy protocol behavior and prevents non-deterministic signatures
+	// when validators use different protocol versions
+	msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
 	return &cometbftprivvalv1.Message{Sum: msgSum}, nil
 }
 
