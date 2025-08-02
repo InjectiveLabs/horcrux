@@ -106,7 +106,15 @@ func (p *LegacyProtocol) handleSignVoteRequest(ctx context.Context, chainID stri
 
 	msgSum.SignedVoteResponse.Vote.Timestamp = timestamp
 	msgSum.SignedVoteResponse.Vote.Signature = sig
-	msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
+	
+	// CRITICAL: Vote extensions are only allowed for non-nil precommits
+	// Same logic as V1 protocol to ensure consistency
+	isPrecommit := vote.Type == cometproto.PrecommitType
+	isNonNilBlock := len(vote.BlockID.Hash) > 0
+	
+	if len(voteExtSig) > 0 && isPrecommit && isNonNilBlock {
+		msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
+	}
 	return cometprotoprivval.Message{Sum: msgSum}, nil
 }
 
@@ -263,10 +271,16 @@ func (p *V1Protocol) handleSignVoteRequest(ctx context.Context, chainID string, 
 
 	msgSum.SignedVoteResponse.Vote.Timestamp = req.Vote.Timestamp
 	msgSum.SignedVoteResponse.Vote.Signature = sig
-	// CRITICAL FIX: Always assign ExtensionSignature to ensure deterministic behavior
-	// This matches the legacy protocol behavior and prevents non-deterministic signatures
-	// when validators use different protocol versions
-	msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
+	
+	// CRITICAL: Vote extensions are only allowed for non-nil precommits
+	// - NOT allowed for prevotes  
+	// - NOT allowed for nil precommits (BlockID.Hash is empty)
+	isPrecommit := req.Vote.Type == cometbfttypesv1.SignedMsgType(cometproto.PrecommitType)
+	isNonNilBlock := len(req.Vote.BlockID.Hash) > 0
+	
+	if !req.SkipExtensionSigning && len(voteExtSig) > 0 && isPrecommit && isNonNilBlock {
+		msgSum.SignedVoteResponse.Vote.ExtensionSignature = voteExtSig
+	}
 	return &cometbftprivvalv1.Message{Sum: msgSum}, nil
 }
 
